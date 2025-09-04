@@ -99,31 +99,70 @@ export default async function handler(req, res) {
       
       if (type === 'analyze_screenshot' && data) {
         try {
-          // Simple analysis using OpenAI (if available)
+          // Extract screenshot image data
+          const imageData = data.imageDataUrl || data.croppedImageDataUrl;
+          
+          if (!imageData) {
+            throw new Error('No image data provided');
+          }
+          
+          // Use OpenAI Vision API for image analysis
           const apiKey = process.env.OPENAI_API_KEY;
           if (apiKey) {
             const openai = new OpenAI({ apiKey });
             const completion = await openai.chat.completions.create({
+              model: "gpt-4-vision-preview",
+              max_tokens: 300,
               messages: [
                 {
                   role: "user",
-                  content: "Analyze this screenshot data and provide a brief description of what you see. This is for ad analysis purposes."
+                  content: [
+                    {
+                      type: "text",
+                      text: `Analyze this screenshot for advertising and marketing purposes. Please identify:
+
+1. **Ad Type**: What type of advertisement or content is this? (Social media ad, banner ad, product page, etc.)
+2. **Key Elements**: What are the main visual elements, text, colors, and layout?
+3. **Target Audience**: Based on the content and design, who might this be targeting?
+4. **Effectiveness**: What makes this ad potentially effective or ineffective?
+5. **Call-to-Action**: What action is the ad trying to get users to take?
+
+Provide a detailed but concise analysis suitable for competitive intelligence and marketing research.`
+                    },
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: imageData,
+                        detail: "high"
+                      }
+                    }
+                  ]
                 }
-              ],
-              model: "gpt-3.5-turbo",
-              max_tokens: 100
+              ]
             });
             
             res.status(200).json({
               message: 'Screenshot analysis complete',
               timestamp: new Date().toISOString(),
               analysis: completion.choices[0]?.message?.content || 'Analysis completed',
-              type: 'screenshot_analysis'
+              type: 'screenshot_analysis',
+              model_used: 'gpt-4-vision-preview'
             });
             return;
+          } else {
+            throw new Error('OpenAI API key not configured');
           }
         } catch (error) {
           console.error('Analysis error:', error);
+          
+          // Return error details for debugging
+          res.status(500).json({
+            message: 'Screenshot analysis failed',
+            timestamp: new Date().toISOString(),
+            error: error.message,
+            type: 'screenshot_analysis_error'
+          });
+          return;
         }
       }
       
