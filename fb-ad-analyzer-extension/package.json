@@ -1,0 +1,26 @@
+{
+  "name": "fb-ad-analyzer-extension",
+  "version": "1.0.0",
+  "description": "Chrome extension for analyzing Facebook ads from Ad Library",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^0.10.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.251",
+    "@types/webextension-polyfill": "^0.10.7",
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.10",
+    "vite-plugin-web-extension": "^4.1.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

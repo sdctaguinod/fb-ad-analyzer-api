@@ -1,0 +1,20 @@
+{
+  "name": "fb-ad-analyzer-api",
+  "version": "1.0.0",
+  "description": "Facebook Ad Analyzer API with Vercel serverless functions",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "openai": "^4.24.1"
+  },
+  "devDependencies": {
+    "vercel": "^32.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

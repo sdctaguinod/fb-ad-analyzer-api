@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facebook Ad Analyzer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>FB Ad Analyzer</h1>
+      <div class="status" id="status">
+        <span class="indicator"></span>
+        <span class="text">Ready</span>
+      </div>
+    </header>
+    
+    <main>
+      <section class="capture-section">
+        <h2>Screenshot Capture</h2>
+        <p class="description">Drag to select any area on screen to capture and analyze</p>
+        <button id="captureBtn" class="btn primary">
+          <span class="icon">📸</span>
+          Start Screenshot Capture
+        </button>
+      </section>
+      
+      <section class="results-section" id="resultsSection" style="display: none;">
+        <h2>Analysis Results</h2>
+        <div class="results-content" id="resultsContent">
+          <!-- Results will be populated here -->
+        </div>
+      </section>
+      
+      <section class="settings-section">
+        <h3>Settings</h3>
+        <div class="setting-item">
+          <label>
+            <input type="checkbox" id="autoAnalyze" checked>
+            Auto-analyze captured screenshots
+          </label>
+        </div>
+      </section>
+    </main>
+    
+    <footer>
+      <div class="stats">
+        <span>Screenshots captured: <strong id="captureCount">0</strong></span>
+      </div>
+    </footer>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
