@@ -21,7 +21,7 @@
       switch (message.type) {
         case 'START_SCREEN_CAPTURE':
           if (message.streamId) {
-            // Desktop capture method
+            // Desktop capture method (legacy)
             startDesktopCapture(message.streamId);
           } else if (message.imageDataUrl) {
             // Tab capture method with visual selection
@@ -40,6 +40,7 @@
       }
     });
   }
+  
   
   async function startDesktopCapture(captureStreamId) {
     if (isCapturing) return;

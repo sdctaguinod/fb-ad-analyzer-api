@@ -1,5 +1,26 @@
 // Facebook Ad Analyzer - Background Script (Service Worker)
-const API_ENDPOINT = 'https://fb-ad-analyzer-pyuev885i-dominics-projects-14a42b14.vercel.app';
+const API_ENDPOINT = 'https://fb-ad-analyzer-api.vercel.app';
+
+// Utility function for fetch with timeout
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
 
 let isCapturing = false;
 let captureTabId = null;
@@ -59,33 +80,34 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   try {
     switch (message.type) {
       case 'START_SCREENSHOT_CAPTURE':
-        // Handle messages from popup (sender.tab is undefined) vs content scripts
-        let tabId;
-        if (sender.tab && sender.tab.id) {
-          // Message from content script
-          tabId = sender.tab.id;
-        } else {
-          // Message from popup - get active tab
-          try {
-            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!activeTab || !activeTab.id) {
-              sendResponse({ success: false, error: 'No active tab found' });
-              return;
-            }
-            tabId = activeTab.id;
-          } catch (error) {
-            console.error('Failed to get active tab:', error);
-            sendResponse({ success: false, error: 'Failed to get active tab: ' + error.message });
-            return;
-          }
-        }
+        // Send immediate ACK to keep popup happy
+        sendResponse({ success: true, message: 'Capture initiated' });
         
-        console.log('Starting screenshot capture for tab ID:', tabId);
-        startScreenshotCapture(tabId).then(sendResponse).catch(error => {
-          console.error('Screenshot capture failed:', error);
-          sendResponse({ success: false, error: error.message });
-        });
-        return true; // Will respond asynchronously
+        // Do heavy work asynchronously without blocking the response
+        (async () => {
+          try {
+            // Get tab ID (existing logic)
+            let tabId;
+            if (sender.tab && sender.tab.id) {
+              tabId = sender.tab.id;
+            } else {
+              const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              if (!activeTab || !activeTab.id) {
+                console.error('No active tab found');
+                return;
+              }
+              tabId = activeTab.id;
+            }
+            
+            // Do the actual capture work
+            await startScreenshotCapture(tabId);
+          } catch (error) {
+            console.error('Async capture failed:', error);
+            // Could send error via storage or another message if needed
+          }
+        })();
+        
+        return true; // Keep port open for async work
         
       case 'SCREENSHOT_SELECTED':
         // This should only come from content scripts, so sender.tab should exist
@@ -128,7 +150,8 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 async function startScreenshotCapture(tabId) {
   try {
     if (isCapturing) {
-      return { success: false, error: 'Already capturing' };
+      console.error('Already capturing, ignoring request');
+      return;
     }
     
     isCapturing = true;
@@ -136,132 +159,80 @@ async function startScreenshotCapture(tabId) {
     
     console.log('Starting screenshot capture for tab:', tabId);
     
-    // Try desktop capture first, then fallback to visible tab capture
+    // Inject content script first
     try {
-      const streamId = await new Promise((resolve, reject) => {
-        console.log('Attempting desktop capture...');
-        
-        if (!chrome.desktopCapture) {
-          reject(new Error('Desktop capture API not available'));
-          return;
-        }
-        
-        try {
-          chrome.desktopCapture.chooseDesktopMedia(
-            ['screen', 'window', 'tab'],
-            (streamId) => {
-              console.log('Desktop capture result:', streamId);
-              if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-                return;
-              }
-              if (streamId) {
-                resolve(streamId);
-              } else {
-                reject(new Error('Desktop capture cancelled or denied'));
-              }
-            }
-          );
-        } catch (apiError) {
-          reject(new Error('Desktop capture API error: ' + apiError.message));
-        }
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content.js']
       });
       
-      console.log('Desktop capture successful, streamId:', streamId);
-      
-      // Inject content script and start desktop capture
+      if (chrome.runtime.lastError) {
+        throw new Error('Script injection failed: ' + chrome.runtime.lastError.message);
+      }
+    } catch (scriptError) {
+      console.error('Failed to inject content script:', scriptError);
+      throw new Error('Failed to inject content script: ' + scriptError.message);
+    }
+    
+    // Capture visible tab
+    try {
+      // Get window ID for the tab
+      let windowId;
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['content.js']
-        });
-        
-        if (chrome.runtime.lastError) {
-          throw new Error('Script injection failed: ' + chrome.runtime.lastError.message);
-        }
-      } catch (scriptError) {
-        throw new Error('Failed to inject content script: ' + scriptError.message);
+        const tab = await chrome.tabs.get(tabId);
+        windowId = tab.windowId;
+        console.log(`Got window ID ${windowId} for tab ${tabId}`);
+      } catch (tabError) {
+        console.error('Failed to get tab info:', tabError);
+        // Fallback: try to get current window
+        const currentWindow = await chrome.windows.getCurrent();
+        windowId = currentWindow.id;
+        console.log(`Using current window ID ${windowId} as fallback`);
       }
       
+      const screenshotDataUrl = await new Promise((resolve, reject) => {
+        chrome.tabs.captureVisibleTab(null, {
+          format: 'png',
+          quality: 90
+        }, (dataUrl) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (dataUrl) {
+            resolve(dataUrl);
+          } else {
+            reject(new Error('Tab capture returned no data'));
+          }
+        });
+      });
+      
+      console.log('Tab screenshot captured successfully');
+      
+      // Send screenshot to content script for area selection
       try {
         chrome.tabs.sendMessage(tabId, {
           type: 'START_SCREEN_CAPTURE',
-          streamId: streamId
+          imageDataUrl: screenshotDataUrl,
+          method: 'tab_capture'
         });
       } catch (messageError) {
-        console.error('Failed to send message to content script:', messageError);
-        // Don't throw here, desktop capture might still work
+        console.error('Failed to send screenshot to content script:', messageError);
+        // Continue anyway - content script might still receive the message
       }
       
-      return { success: true, method: 'desktop', streamId };
+      console.log('Screenshot capture initiated successfully');
       
-    } catch (desktopError) {
-      console.log('Desktop capture failed, trying tab capture:', desktopError.message);
-      
-      try {
-        // Fallback: Use tab screenshot with visual selection
-        if (!chrome.tabs || !chrome.tabs.captureVisibleTab) {
-          throw new Error('Tab capture API not available');
-        }
-        
-        const screenshotDataUrl = await new Promise((resolve, reject) => {
-          chrome.tabs.captureVisibleTab(null, {
-            format: 'png',
-            quality: 90
-          }, (dataUrl) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-              return;
-            }
-            if (dataUrl) {
-              resolve(dataUrl);
-            } else {
-              reject(new Error('Tab capture returned no data'));
-            }
-          });
-        });
-        
-        console.log('Tab capture successful, sending to content script for selection');
-        
-        // Inject content script if not already present
-        try {
-          await chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['content.js']
-          });
-          
-          if (chrome.runtime.lastError) {
-            throw new Error('Script injection failed: ' + chrome.runtime.lastError.message);
-          }
-        } catch (scriptError) {
-          console.error('Content script injection failed:', scriptError);
-          // Continue anyway, script might already be injected
-        }
-        
-        // Send image data to content script for visual selection
-        try {
-          chrome.tabs.sendMessage(tabId, {
-            type: 'START_SCREEN_CAPTURE',
-            imageDataUrl: screenshotDataUrl,
-            method: 'tab_capture'
-          });
-        } catch (messageError) {
-          console.error('Failed to send message to content script:', messageError);
-        }
-        
-        return { success: true, method: 'tab' };
-        
-      } catch (tabError) {
-        console.error('Tab capture also failed:', tabError);
-        throw new Error('Both desktop and tab capture failed: ' + tabError.message);
-      }
+    } catch (captureError) {
+      console.error('Tab capture failed:', captureError);
+      throw new Error('Screenshot capture failed: ' + captureError.message);
     }
     
   } catch (error) {
     isCapturing = false;
     captureTabId = null;
-    console.error('All screenshot methods failed:', error);
-    return { success: false, error: 'Screenshot capture failed: ' + error.message };
+    console.error('Screenshot capture failed:', error);
+    // Could notify popup of error via storage or message if needed
   }
 }
 
@@ -277,7 +248,8 @@ async function handleScreenshotCapture(screenshotData, tabId) {
       [captureId]: {
         ...screenshotData,
         timestamp,
-        tabId
+        tabId,
+        status: 'captured'
       }
     });
     
@@ -285,6 +257,16 @@ async function handleScreenshotCapture(screenshotData, tabId) {
     const result = await chrome.storage.local.get(['captureCount']);
     const newCount = (result.captureCount || 0) + 1;
     await chrome.storage.local.set({ captureCount: newCount });
+    
+    // Store latest capture info for popup to pick up
+    await chrome.storage.local.set({
+      latestCapture: {
+        captureId,
+        timestamp,
+        status: 'captured',
+        data: screenshotData
+      }
+    });
     
     // Notify popup if open
     try {
@@ -294,12 +276,18 @@ async function handleScreenshotCapture(screenshotData, tabId) {
       });
     } catch (error) {
       // Popup might not be open, that's okay
+      console.log('Could not notify popup:', error.message);
     }
     
     // Check if auto-analysis is enabled
     const settings = await chrome.storage.sync.get(['autoAnalyze']);
-    if (settings.autoAnalyze) {
+    console.log('Auto-analyze setting:', settings.autoAnalyze);
+    
+    if (settings.autoAnalyze !== false) {
+      console.log('Starting auto-analysis for screenshot:', captureId);
       await handleScreenshotAnalysis({ ...screenshotData, captureId });
+    } else {
+      console.log('Auto-analysis disabled, skipping analysis');
     }
     
     // Reset capture state
@@ -318,13 +306,26 @@ async function handleScreenshotAnalysis(screenshotData) {
     console.log('Starting screenshot analysis:', screenshotData);
     
     // Test API connection first
+    console.log('Testing API connection...');
     const apiTest = await testApiConnection();
+    console.log('API test result:', apiTest);
+    
     if (!apiTest.success) {
-      throw new Error('API connection failed');
+      throw new Error('API connection failed: ' + (apiTest.error || 'Unknown error'));
     }
     
-    // Send analysis request
-    const response = await fetch(`${API_ENDPOINT}/api/hello`, {
+    console.log('API connection successful, sending analysis request...');
+    
+    // Log image data info for debugging
+    const imageData = screenshotData.imageDataUrl || screenshotData.croppedImageDataUrl;
+    if (imageData) {
+      console.log('Image data found:', imageData.substring(0, 50) + '... (length:', imageData.length, ')');
+    } else {
+      console.error('No image data found in screenshot data:', Object.keys(screenshotData));
+    }
+    
+    // Send analysis request with timeout
+    const response = await fetchWithTimeout(`${API_ENDPOINT}/api/hello`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -334,25 +335,37 @@ async function handleScreenshotAnalysis(screenshotData) {
         data: screenshotData,
         timestamp: Date.now()
       })
-    });
+    }, 20000); // 20 second timeout for analysis
+    
+    console.log('Analysis API response status:', response.status);
     
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`);
     }
     
     const result = await response.json();
+    console.log('Analysis API result:', result);
     
     // Store analysis result
     if (screenshotData.captureId) {
       const existingCapture = await chrome.storage.local.get([screenshotData.captureId]);
       if (existingCapture[screenshotData.captureId]) {
         existingCapture[screenshotData.captureId].analysis = result;
+        existingCapture[screenshotData.captureId].status = 'analyzed';
         await chrome.storage.local.set(existingCapture);
       }
     }
     
-    // Update last analysis timestamp
-    await chrome.storage.local.set({ lastAnalysis: Date.now() });
+    // Update last analysis timestamp and store result for popup
+    await chrome.storage.local.set({ 
+      lastAnalysis: Date.now(),
+      latestAnalysis: {
+        timestamp: Date.now(),
+        captureId: screenshotData.captureId,
+        result: result,
+        status: 'completed'
+      }
+    });
     
     // Notify popup
     try {
@@ -362,12 +375,23 @@ async function handleScreenshotAnalysis(screenshotData) {
       });
     } catch (error) {
       // Popup might not be open
+      console.log('Could not notify popup of analysis completion:', error.message);
     }
     
     console.log('Analysis complete:', result);
     
   } catch (error) {
     console.error('Analysis failed:', error);
+    
+    // Store error result for popup
+    await chrome.storage.local.set({
+      latestAnalysis: {
+        timestamp: Date.now(),
+        captureId: screenshotData.captureId,
+        error: error.message,
+        status: 'error'
+      }
+    });
     
     // Notify popup about error
     try {
@@ -377,18 +401,19 @@ async function handleScreenshotAnalysis(screenshotData) {
       });
     } catch (e) {
       // Popup might not be open
+      console.log('Could not notify popup of analysis error:', e.message);
     }
   }
 }
 
 async function testApiConnection() {
   try {
-    const response = await fetch(`${API_ENDPOINT}/api/hello`, {
+    const response = await fetchWithTimeout(`${API_ENDPOINT}/api/hello`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       }
-    });
+    }, 10000); // 10 second timeout for connection test
     
     if (!response.ok) {
       return {
