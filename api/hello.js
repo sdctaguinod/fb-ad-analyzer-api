@@ -111,7 +111,7 @@ export default async function handler(req, res) {
           if (apiKey) {
             const openai = new OpenAI({ apiKey });
             const completion = await openai.chat.completions.create({
-              model: "gpt-4-vision-preview",
+              model: "gpt-4o",
               max_tokens: 300,
               messages: [
                 {
@@ -146,7 +146,7 @@ Provide a detailed but concise analysis suitable for competitive intelligence an
               timestamp: new Date().toISOString(),
               analysis: completion.choices[0]?.message?.content || 'Analysis completed',
               type: 'screenshot_analysis',
-              model_used: 'gpt-4-vision-preview'
+              model_used: 'gpt-4o'
             });
             return;
           } else {
