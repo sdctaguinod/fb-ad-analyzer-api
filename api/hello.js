@@ -119,15 +119,16 @@ export default async function handler(req, res) {
                   content: [
                     {
                       type: "text",
-                      text: `Analyze this screenshot for advertising and marketing purposes. Please identify:
+                      text: `You are analyzing a screenshot of a digital advertisement (from Facebook or LinkedIn). 
+Return your response in 5 labeled sections. Be concise and objective. 
 
-1. **Ad Type**: What type of advertisement or content is this? (Social media ad, banner ad, product page, etc.)
-2. **Key Elements**: What are the main visual elements, text, colors, and layout?
-3. **Target Audience**: Based on the content and design, who might this be targeting?
-4. **Effectiveness**: What makes this ad potentially effective or ineffective?
-5. **Call-to-Action**: What action is the ad trying to get users to take?
+1. Image Type: Describe what kind of image it is (photo, illustration, stock photo, infographic, product shot, lifestyle, etc.).  
+2. Image Content & Design: Describe the main elements of the image and its design style (colors, layout, people, objects, mood).  
+3. Value Provided: Summarize the value or benefit the ad is offering (discount, free trial, insights, brand credibility, product feature, etc.).  
+4. Tone of Copy: Identify the tone of the written text (e.g., professional, casual, urgent, playful, authoritative).  
+5. Call to Action: State the CTA (explicit or implied) and whether it is strong, weak, or unclear.  
 
-Provide a detailed but concise analysis suitable for competitive intelligence and marketing research.`
+Format your answer as plain text with the section headers followed by a short explanation (1–3 sentences each).`
                     },
                     {
                       type: "image_url",
