@@ -380,6 +380,9 @@ async function handleScreenshotAnalysis(screenshotData) {
     
     console.log('Analysis complete:', result);
     
+    // Save analysis data to database
+    await saveAnalysisToDatabase(screenshotData, result);
+    
   } catch (error) {
     console.error('Analysis failed:', error);
     
@@ -508,4 +511,63 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
       console.error('Cleanup failed:', error);
     }
   });
+}
+
+// Function to save analysis data to database
+async function saveAnalysisToDatabase(screenshotData, analysisResult) {
+  try {
+    console.log('Attempting to save analysis to database...');
+    
+    // Prepare data for database
+    const saveData = {
+      screenshot_url: screenshotData.imageDataUrl || screenshotData.croppedImageDataUrl || null,
+      analysis_data: analysisResult.analysis || 'No analysis data',
+      source_url: screenshotData.url || window.location?.href || null,
+      platform: detectPlatform(screenshotData.url),
+      user_id: 'anonymous' // Placeholder for now
+    };
+    
+    // Send to save-ad API
+    const response = await fetchWithTimeout(`${API_ENDPOINT}/api/save-ad`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(saveData)
+    }, 10000); // 10 second timeout
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Database save failed: ${response.status} ${errorData.message || response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Analysis saved to database successfully:', result.id);
+    
+    return { success: true, id: result.id };
+    
+  } catch (error) {
+    console.error('Failed to save analysis to database:', error);
+    
+    // Don't throw error - we don't want to break the extension if database save fails
+    // Just log the error and continue
+    return { success: false, error: error.message };
+  }
+}
+
+// Helper function to detect platform from URL
+function detectPlatform(url) {
+  if (!url) return 'unknown';
+  
+  if (url.includes('facebook.com') || url.includes('fb.com')) {
+    return 'facebook';
+  } else if (url.includes('linkedin.com')) {
+    return 'linkedin';
+  } else if (url.includes('instagram.com')) {
+    return 'instagram';
+  } else if (url.includes('twitter.com') || url.includes('x.com')) {
+    return 'twitter';
+  } else {
+    return 'other';
+  }
 }
