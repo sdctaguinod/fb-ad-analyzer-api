@@ -192,7 +192,7 @@ export default async function handler(req, res) {
             const openai = new OpenAI({ apiKey });
             const completion = await openai.chat.completions.create({
               model: "gpt-4o",
-              max_tokens: 300,
+              max_tokens: 1000,
               messages: [
                 {
                   role: "user",
@@ -201,14 +201,14 @@ export default async function handler(req, res) {
                       type: "text",
                       text: `Analyze this ad screenshot as a marketing expert and provide deep competitive intelligence insights:
 
-**STRATEGIC ANALYSIS** (expert insights):
+**STRATEGIC ANALYSIS** (expert insights - this section only):
 1. **Psychological Approach**: [What psychological triggers are being used - urgency, social proof, authority, etc.]
 2. **Visual Strategy**: [How the visual hierarchy and design elements drive specific user behaviors]
 3. **Value Positioning**: [How the offer is positioned relative to competitors and market positioning]
 4. **Conversion Psychology**: [What makes this ad likely to convert and why]
 5. **Competitive Advantage**: [What this advertiser is doing differently/better than typical ads in this space]
 
-**STRUCTURED_DATA** (for database):
+**STRUCTURED_DATA** (for database only - do not include in analysis):
 {
   "advertiser_name": "[Company/brand name]",
   "headline": "[Main headline text]",
@@ -217,7 +217,7 @@ export default async function handler(req, res) {
   "product_service": "[What's being promoted]"
 }
 
-Focus on providing insights that a marketing expert would notice, not just describing what's visible.`
+IMPORTANT: The analysis section should only contain the strategic insights. The structured data section is for database storage only and should not be displayed to users.`
                     },
                     {
                       type: "image_url",
