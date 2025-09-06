@@ -521,11 +521,18 @@ async function saveAnalysisToDatabase(screenshotData, analysisResult) {
     // Prepare data for database
     const saveData = {
       screenshot_url: screenshotData.imageDataUrl || screenshotData.croppedImageDataUrl || null,
-      analysis_data: analysisResult.analysis || 'No analysis data',
-      source_url: screenshotData.url || window.location?.href || null,
+      analysis_data: analysisResult.analysis || analysisResult.message || 'No analysis data',
+      source_url: screenshotData.url || null,
       platform: detectPlatform(screenshotData.url),
       user_id: 'anonymous' // Placeholder for now
     };
+    
+    console.log('Preparing to save data:', {
+      has_screenshot: !!saveData.screenshot_url,
+      has_analysis: !!saveData.analysis_data,
+      platform: saveData.platform,
+      source_url: saveData.source_url
+    });
     
     // Send to save-ad API
     const response = await fetchWithTimeout(`${API_ENDPOINT}/api/save-ad`, {
