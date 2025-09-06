@@ -314,32 +314,16 @@ class PopupController {
   displayResults(data) {
     console.log('Displaying results:', data);
     
+    // Show only the analysis content without metadata
     this.resultsContent.innerHTML = `
-      <div class="result-item">
-        <strong>Status:</strong> ${data.message || 'Screenshot analysis complete'}
-      </div>
-      <div class="result-item">
-        <strong>Timestamp:</strong> ${data.timestamp || new Date().toLocaleString()}
-      </div>
-      ${data.model_used ? `
-        <div class="result-item">
-          <strong>AI Model:</strong> ${data.model_used}
-        </div>
-      ` : ''}
       ${data.analysis ? `
         <div class="result-item">
-          <strong>AI Analysis:</strong> 
-          <div style="margin-top: 8px; white-space: pre-wrap; line-height: 1.4;">${data.analysis}</div>
+          <div style="white-space: pre-wrap; line-height: 1.4;">${data.analysis}</div>
         </div>
       ` : ''}
       ${data.error ? `
         <div class="result-item error">
           <strong>Error:</strong> ${data.error}
-        </div>
-      ` : ''}
-      ${data.overall_status ? `
-        <div class="result-item">
-          <strong>System Status:</strong> ${data.overall_status}
         </div>
       ` : ''}
     `;
