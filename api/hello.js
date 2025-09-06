@@ -2,6 +2,82 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
+// Function to parse AI response and extract analysis and structured data
+function parseAIResponse(rawResponse) {
+  try {
+    // Split the response by the STRUCTURED_DATA marker
+    const parts = rawResponse.split('**STRUCTURED_DATA**');
+    
+    let analysis = rawResponse;
+    let structured_data = {};
+    
+    if (parts.length >= 2) {
+      // Extract analysis section (everything before STRUCTURED_DATA)
+      analysis = parts[0].replace('**ANALYSIS**', '').trim();
+      if (analysis.includes('(for display):')) {
+        analysis = analysis.replace('(for display):', '').trim();
+      }
+      
+      // Extract and parse structured data section
+      const structuredSection = parts[1].trim();
+      
+      // Find JSON object in the structured section
+      const jsonMatch = structuredSection.match(/\{[\s\S]*?\}/);
+      
+      if (jsonMatch) {
+        try {
+          structured_data = JSON.parse(jsonMatch[0]);
+        } catch (parseError) {
+          console.error('Failed to parse structured data JSON:', parseError);
+          // Try to extract data manually if JSON parsing fails
+          structured_data = extractStructuredDataManually(structuredSection);
+        }
+      } else {
+        // Try to extract data manually if no JSON found
+        structured_data = extractStructuredDataManually(structuredSection);
+      }
+    }
+    
+    // Clean up analysis text
+    analysis = analysis.replace(/^\*\*ANALYSIS\*\*\s*(\(for display\):)?\s*/, '');
+    
+    return {
+      analysis: analysis.trim() || rawResponse,
+      structured_data: structured_data
+    };
+    
+  } catch (error) {
+    console.error('Error parsing AI response:', error);
+    return {
+      analysis: rawResponse,
+      structured_data: {}
+    };
+  }
+}
+
+// Fallback function to manually extract structured data
+function extractStructuredDataManually(text) {
+  const data = {};
+  
+  // Try to extract common fields using regex
+  const patterns = {
+    advertiser_name: /(?:advertiser_name|company|brand)["']?\s*:\s*["']?([^",\n}]+)/i,
+    headline: /(?:headline|title)["']?\s*:\s*["']?([^",\n}]+)/i,
+    description: /(?:description|body|text)["']?\s*:\s*["']?([^",\n}]+)/i,
+    call_to_action: /(?:call_to_action|cta|button)["']?\s*:\s*["']?([^",\n}]+)/i,
+    product_service: /(?:product_service|product|service)["']?\s*:\s*["']?([^",\n}]+)/i
+  };
+  
+  for (const [key, pattern] of Object.entries(patterns)) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      data[key] = match[1].replace(/["']/g, '').trim();
+    }
+  }
+  
+  return data;
+}
+
 async function testSupabaseConnection() {
   try {
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -119,16 +195,25 @@ export default async function handler(req, res) {
                   content: [
                     {
                       type: "text",
-                      text: `You are analyzing a screenshot of a digital advertisement (from Facebook or LinkedIn). 
-Return your response in 5 labeled sections. Be concise and objective. 
+                      text: `Analyze this ad screenshot and provide:
 
-1. Image Type: Describe what kind of image it is (photo, illustration, stock photo, infographic, product shot, lifestyle, etc.).  
-2. Image Content & Design: Describe the main elements of the image and its design style (colors, layout, people, objects, mood).  
-3. Value Provided: Summarize the value or benefit the ad is offering (discount, free trial, insights, brand credibility, product feature, etc.).  
-4. Tone of Copy: Identify the tone of the written text (e.g., professional, casual, urgent, playful, authoritative).  
-5. Call to Action: State the CTA (explicit or implied) and whether it is strong, weak, or unclear.  
+**ANALYSIS** (for display):
+1. Image Type: [Type of image/content]
+2. Image Content & Design: [Visual elements and design]
+3. Value Provided: [What the ad offers]
+4. Tone of Copy: [Writing style and mood]
+5. Call to Action: [CTA analysis]
 
-Format your answer as plain text with the section headers followed by a short explanation (1–3 sentences each).`
+**STRUCTURED_DATA** (for database):
+{
+  "advertiser_name": "[Company/brand name]",
+  "headline": "[Main headline text]",
+  "description": "[Ad body/description text]",
+  "call_to_action": "[Actual button text]",
+  "product_service": "[What's being promoted]"
+}
+
+Separate the analysis and structured data clearly.`
                     },
                     {
                       type: "image_url",
@@ -142,10 +227,17 @@ Format your answer as plain text with the section headers followed by a short ex
               ]
             });
             
+            const rawResponse = completion.choices[0]?.message?.content || 'Analysis completed';
+            
+            // Parse the AI response to extract analysis and structured data
+            const parsedResponse = parseAIResponse(rawResponse);
+            
             res.status(200).json({
               message: 'Screenshot analysis complete',
               timestamp: new Date().toISOString(),
-              analysis: completion.choices[0]?.message?.content || 'Analysis completed',
+              analysis: parsedResponse.analysis,
+              structured_data: parsedResponse.structured_data,
+              raw_response: rawResponse, // For debugging
               type: 'screenshot_analysis',
               model_used: 'gpt-4o'
             });

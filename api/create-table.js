@@ -47,6 +47,11 @@ export default async function handler(req, res) {
         source_url TEXT,
         platform TEXT DEFAULT 'unknown',
         analysis_data TEXT,
+        advertiser_name TEXT,
+        headline TEXT,
+        description TEXT,
+        call_to_action TEXT,
+        product_service TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -55,6 +60,7 @@ export default async function handler(req, res) {
       CREATE INDEX IF NOT EXISTS idx_saved_ads_user_id ON saved_ads(user_id);
       CREATE INDEX IF NOT EXISTS idx_saved_ads_platform ON saved_ads(platform);
       CREATE INDEX IF NOT EXISTS idx_saved_ads_created_at ON saved_ads(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_saved_ads_advertiser ON saved_ads(advertiser_name);
     `;
     
     // Execute the SQL

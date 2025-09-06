@@ -524,14 +524,23 @@ async function saveAnalysisToDatabase(screenshotData, analysisResult) {
       analysis_data: analysisResult.analysis || analysisResult.message || 'No analysis data',
       source_url: screenshotData.url || null,
       platform: detectPlatform(screenshotData.url),
-      user_id: 'anonymous' // Placeholder for now
+      user_id: 'anonymous', // Placeholder for now
+      // Add structured data fields from AI response
+      advertiser_name: analysisResult.structured_data?.advertiser_name || null,
+      headline: analysisResult.structured_data?.headline || null,
+      description: analysisResult.structured_data?.description || null,
+      call_to_action: analysisResult.structured_data?.call_to_action || null,
+      product_service: analysisResult.structured_data?.product_service || null
     };
     
     console.log('Preparing to save data:', {
       has_screenshot: !!saveData.screenshot_url,
       has_analysis: !!saveData.analysis_data,
       platform: saveData.platform,
-      source_url: saveData.source_url
+      source_url: saveData.source_url,
+      has_structured_data: !!analysisResult.structured_data,
+      advertiser: saveData.advertiser_name,
+      headline: saveData.headline ? saveData.headline.substring(0, 50) + '...' : null
     });
     
     // Send to save-ad API

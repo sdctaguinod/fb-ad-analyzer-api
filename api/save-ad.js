@@ -42,6 +42,11 @@ export default async function handler(req, res) {
       analysis_data,
       source_url,
       platform,
+      advertiser_name,
+      headline,
+      description,
+      call_to_action,
+      product_service,
       user_id = 'anonymous' // Default user ID for now
     } = req.body;
     
@@ -61,6 +66,11 @@ export default async function handler(req, res) {
       source_url,
       platform: platform || 'unknown',
       analysis_data: typeof analysis_data === 'string' ? analysis_data : JSON.stringify(analysis_data),
+      advertiser_name: advertiser_name || null,
+      headline: headline || null,
+      description: description || null,
+      call_to_action: call_to_action || null,
+      product_service: product_service || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
