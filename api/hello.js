@@ -13,7 +13,10 @@ function parseAIResponse(rawResponse) {
     
     if (parts.length >= 2) {
       // Extract analysis section (everything before STRUCTURED_DATA)
-      analysis = parts[0].replace('**ANALYSIS**', '').trim();
+      analysis = parts[0].replace('**STRATEGIC ANALYSIS**', '').replace('**ANALYSIS**', '').trim();
+      if (analysis.includes('(expert insights):')) {
+        analysis = analysis.replace('(expert insights):', '').trim();
+      }
       if (analysis.includes('(for display):')) {
         analysis = analysis.replace('(for display):', '').trim();
       }
@@ -39,6 +42,7 @@ function parseAIResponse(rawResponse) {
     }
     
     // Clean up analysis text
+    analysis = analysis.replace(/^\*\*STRATEGIC ANALYSIS\*\*\s*(\(expert insights\):)?\s*/, '');
     analysis = analysis.replace(/^\*\*ANALYSIS\*\*\s*(\(for display\):)?\s*/, '');
     
     return {
@@ -195,14 +199,14 @@ export default async function handler(req, res) {
                   content: [
                     {
                       type: "text",
-                      text: `Analyze this ad screenshot and provide:
+                      text: `Analyze this ad screenshot as a marketing expert and provide deep competitive intelligence insights:
 
-**ANALYSIS** (for display):
-1. Image Type: [Type of image/content]
-2. Image Content & Design: [Visual elements and design]
-3. Value Provided: [What the ad offers]
-4. Tone of Copy: [Writing style and mood]
-5. Call to Action: [CTA analysis]
+**STRATEGIC ANALYSIS** (expert insights):
+1. **Psychological Approach**: [What psychological triggers are being used - urgency, social proof, authority, etc.]
+2. **Visual Strategy**: [How the visual hierarchy and design elements drive specific user behaviors]
+3. **Value Positioning**: [How the offer is positioned relative to competitors and market positioning]
+4. **Conversion Psychology**: [What makes this ad likely to convert and why]
+5. **Competitive Advantage**: [What this advertiser is doing differently/better than typical ads in this space]
 
 **STRUCTURED_DATA** (for database):
 {
@@ -213,7 +217,7 @@ export default async function handler(req, res) {
   "product_service": "[What's being promoted]"
 }
 
-Separate the analysis and structured data clearly.`
+Focus on providing insights that a marketing expert would notice, not just describing what's visible.`
                     },
                     {
                       type: "image_url",
