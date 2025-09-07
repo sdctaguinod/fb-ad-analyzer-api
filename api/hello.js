@@ -210,9 +210,10 @@ export default async function handler(req, res) {
                   content: [
                     {
                       type: "text",
-                      text: `Analyze this ad screenshot as a marketing expert and provide deep competitive intelligence insights:
+                      text: `Analyze this screenshot as a marketing expert. This image may contain MULTIPLE ads. Identify and analyze each ad separately, providing deep competitive intelligence insights for each one.
 
 **STRATEGIC ANALYSIS** (expert insights - this section only):
+For each ad found, provide:
 1. **Psychological Approach**: [What psychological triggers are being used - urgency, social proof, authority, etc.]
 2. **Visual Strategy**: [How the visual hierarchy and design elements drive specific user behaviors]
 3. **Value Positioning**: [How the offer is positioned relative to competitors and market positioning]
@@ -220,15 +221,33 @@ export default async function handler(req, res) {
 5. **Competitive Advantage**: [What this advertiser is doing differently/better than typical ads in this space]
 
 **STRUCTURED_DATA** (for database only - do not include in analysis):
-{
-  "advertiser_name": "[Company/brand name]",
-  "headline": "[Main headline text]",
-  "description": "[Ad body/description text]",
-  "call_to_action": "[Actual button text]",
-  "product_service": "[What's being promoted]"
-}
+Provide an array of objects, one for each ad found:
+[
+  {
+    "advertiser_name": "[Company/brand name for ad 1]",
+    "headline": "[Main headline text for ad 1]",
+    "description": "[Ad body/description text for ad 1]",
+    "call_to_action": "[Actual button text for ad 1]",
+    "product_service": "[What's being promoted in ad 1]"
+  },
+  {
+    "advertiser_name": "[Company/brand name for ad 2]",
+    "headline": "[Main headline text for ad 2]",
+    "description": "[Ad body/description text for ad 2]",
+    "call_to_action": "[Actual button text for ad 2]",
+    "product_service": "[What's being promoted in ad 2]"
+  }
+  // ... continue for each ad found
+]
 
-IMPORTANT: Always provide both sections even if you cannot fully analyze the image. If you cannot identify specific details, use "Unknown" or "Not visible" in the structured data fields. The analysis section should only contain the strategic insights. The structured data section is for database storage only and should not be displayed to users.`
+IMPORTANT: 
+- Analyze ALL ads visible in the image, not just one
+- If you find 4 ads, provide 4 structured data objects
+- If you find 2 ads, provide 2 structured data objects
+- Always provide both sections even if you cannot fully analyze the image
+- If you cannot identify specific details, use "Unknown" or "Not visible" in the structured data fields
+- The analysis section should only contain the strategic insights
+- The structured data section is for database storage only and should not be displayed to users`
                     },
                     {
                       type: "image_url",
