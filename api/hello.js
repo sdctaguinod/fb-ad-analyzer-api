@@ -63,7 +63,7 @@ function parseAIResponse(rawResponse) {
 function extractStructuredDataManually(text) {
   const data = {};
   
-  // Try to extract common fields using regex
+  // Try to extract common fields using regex - more flexible patterns
   const patterns = {
     advertiser_name: /(?:advertiser_name|company|brand)["']?\s*:\s*["']?([^",\n}]+)/i,
     headline: /(?:headline|title)["']?\s*:\s*["']?([^",\n}]+)/i,
@@ -77,6 +77,17 @@ function extractStructuredDataManually(text) {
     if (match && match[1]) {
       data[key] = match[1].replace(/["']/g, '').trim();
     }
+  }
+  
+  // If we still don't have data, try looking in the entire response
+  if (Object.keys(data).length === 0) {
+    console.log('No structured data found in section, checking entire response');
+    // Return at least some structure for database compatibility
+    data.advertiser_name = 'Unknown';
+    data.headline = 'Not visible';
+    data.description = 'Not visible'; 
+    data.call_to_action = 'Not visible';
+    data.product_service = 'Unknown';
   }
   
   return data;
@@ -217,7 +228,7 @@ export default async function handler(req, res) {
   "product_service": "[What's being promoted]"
 }
 
-IMPORTANT: The analysis section should only contain the strategic insights. The structured data section is for database storage only and should not be displayed to users.`
+IMPORTANT: Always provide both sections even if you cannot fully analyze the image. If you cannot identify specific details, use "Unknown" or "Not visible" in the structured data fields. The analysis section should only contain the strategic insights. The structured data section is for database storage only and should not be displayed to users.`
                     },
                     {
                       type: "image_url",
