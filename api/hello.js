@@ -9,7 +9,7 @@ function parseAIResponse(rawResponse) {
     const parts = rawResponse.split('**STRUCTURED_DATA**');
     
     let analysis = rawResponse;
-    let structured_data = {};
+    let structured_data = [];
     
     if (parts.length >= 2) {
       // Extract analysis section (everything before STRUCTURED_DATA)
@@ -24,20 +24,30 @@ function parseAIResponse(rawResponse) {
       // Extract and parse structured data section
       const structuredSection = parts[1].trim();
       
-      // Find JSON object in the structured section
-      const jsonMatch = structuredSection.match(/\{[\s\S]*?\}/);
-      
-      if (jsonMatch) {
+      // Look for JSON array first (multiple ads)
+      const arrayMatch = structuredSection.match(/\[[\s\S]*?\]/);
+      if (arrayMatch) {
         try {
-          structured_data = JSON.parse(jsonMatch[0]);
+          structured_data = JSON.parse(arrayMatch[0]);
         } catch (parseError) {
-          console.error('Failed to parse structured data JSON:', parseError);
-          // Try to extract data manually if JSON parsing fails
-          structured_data = extractStructuredDataManually(structuredSection);
+          console.error('Failed to parse structured data array:', parseError);
+          structured_data = extractMultipleStructuredDataManually(structuredSection);
         }
       } else {
-        // Try to extract data manually if no JSON found
-        structured_data = extractStructuredDataManually(structuredSection);
+        // Look for single JSON object (single ad)
+        const jsonMatch = structuredSection.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          try {
+            const singleAd = JSON.parse(jsonMatch[0]);
+            structured_data = [singleAd]; // Convert to array for consistency
+          } catch (parseError) {
+            console.error('Failed to parse structured data JSON:', parseError);
+            structured_data = extractMultipleStructuredDataManually(structuredSection);
+          }
+        } else {
+          // Try to extract data manually if no JSON found
+          structured_data = extractMultipleStructuredDataManually(structuredSection);
+        }
       }
     }
     
@@ -54,12 +64,68 @@ function parseAIResponse(rawResponse) {
     console.error('Error parsing AI response:', error);
     return {
       analysis: rawResponse,
-      structured_data: {}
+      structured_data: []
     };
   }
 }
 
-// Fallback function to manually extract structured data
+// Fallback function to manually extract multiple structured data objects
+function extractMultipleStructuredDataManually(text) {
+  const dataArray = [];
+  
+  // Split by common separators that might indicate multiple ads
+  const sections = text.split(/(?:\n\s*Ad \d+:|Ad \d+:|---|\n\s*\{)/i);
+  
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i].trim();
+    if (section.length < 10) continue; // Skip very short sections
+    
+    const data = {};
+    
+    // Try to extract common fields using regex
+    const patterns = {
+      advertiser_name: /(?:advertiser_name|company|brand)["']?\s*:\s*["']?([^",\n}]+)/i,
+      headline: /(?:headline|title)["']?\s*:\s*["']?([^",\n}]+)/i,
+      description: /(?:description|body|text)["']?\s*:\s*["']?([^",\n}]+)/i,
+      call_to_action: /(?:call_to_action|cta|button)["']?\s*:\s*["']?([^",\n}]+)/i,
+      product_service: /(?:product_service|product|service)["']?\s*:\s*["']?([^",\n}]+)/i
+    };
+    
+    for (const [key, pattern] of Object.entries(patterns)) {
+      const match = section.match(pattern);
+      if (match && match[1]) {
+        data[key] = match[1].replace(/["']/g, '').trim();
+      }
+    }
+    
+    // Only add if we found at least some data
+    if (Object.keys(data).length > 0) {
+      // Fill in missing fields with defaults
+      if (!data.advertiser_name) data.advertiser_name = 'Unknown';
+      if (!data.headline) data.headline = 'Not visible';
+      if (!data.description) data.description = 'Not visible';
+      if (!data.call_to_action) data.call_to_action = 'Not visible';
+      if (!data.product_service) data.product_service = 'Unknown';
+      
+      dataArray.push(data);
+    }
+  }
+  
+  // If no structured data found, return at least one default entry
+  if (dataArray.length === 0) {
+    dataArray.push({
+      advertiser_name: 'Unknown',
+      headline: 'Not visible',
+      description: 'Not visible',
+      call_to_action: 'Not visible',
+      product_service: 'Unknown'
+    });
+  }
+  
+  return dataArray;
+}
+
+// Fallback function to manually extract single structured data (legacy)
 function extractStructuredDataManually(text) {
   const data = {};
   
@@ -203,7 +269,7 @@ export default async function handler(req, res) {
             const openai = new OpenAI({ apiKey });
             const completion = await openai.chat.completions.create({
               model: "gpt-4o",
-              max_tokens: 1000,
+              max_tokens: 2000,
               messages: [
                 {
                   role: "user",
@@ -266,11 +332,15 @@ IMPORTANT:
             // Parse the AI response to extract analysis and structured data
             const parsedResponse = parseAIResponse(rawResponse);
             
+            // Count how many ads were found
+            const adsFound = Array.isArray(parsedResponse.structured_data) ? parsedResponse.structured_data.length : 1;
+            
             res.status(200).json({
-              message: 'Screenshot analysis complete',
+              message: `Screenshot analysis complete - ${adsFound} ad(s) found`,
               timestamp: new Date().toISOString(),
               analysis: parsedResponse.analysis,
               structured_data: parsedResponse.structured_data,
+              ads_found: adsFound,
               raw_response: rawResponse, // For debugging
               type: 'screenshot_analysis',
               model_used: 'gpt-4o'
